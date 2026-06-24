@@ -1,4 +1,92 @@
-fig_bh = px.bar(df, x="Borehole", y="Production_m3", color="Station", title="Production by Borehole & Station")
+import streamlit as st, pandas as pd, plotly.express as px, io
+from docx import Document
+from datetime import datetime
+
+st.set_page_config(page_title="Borehole Management", layout="wide", page_icon="🚰")
+
+# --- KORDHINTA XOGTA INTERNETKA (MOCK DATA) ---
+if "daily_data" not in st.session_state:
+    st.session_state.daily_data = pd.DataFrame([
+        {"Date": "2026-06-24", "Station": "Dhamuug", "Borehole": "Dhamuug-01", "Engine_Hours": 8.0, "Solar_Hours": 4.0, "Production_m3": 120.0, "Diesel_Liters": 15.0, "E_Maint": 0.0, "B_Maint": 0.0, "S_Maint": 0.0},
+        {"Date": "2026-06-25", "Station": "Afraag", "Borehole": "Afraag-01", "Engine_Hours": 6.0, "Solar_Hours": 6.0, "Production_m3": 95.0, "Diesel_Liters": 12.0, "E_Maint": 50.0, "B_Maint": 0.0, "S_Maint": 20.0}
+    ])
+
+df = pd.DataFrame(st.session_state.daily_data)
+df['Date'] = pd.to_datetime(df['Date'])
+df['Month'] = df['Date'].dt.to_period('M').astype(str)
+
+# Maanta iyo bishan hadda jirta
+today_str = datetime.now().strftime("%Y-%m-%d")
+this_month_str = datetime.now().strftime("%Y-%m")
+
+df_today = df[df['Date'].dt.strftime('%Y-%m-%d') == today_str]
+df_month = df[df['Month'] == this_month_str]
+
+# --- LOGO IYO CINWAANKA ---
+col_l, col_t = st.columns([1, 4])
+with col_l:
+    logo = st.file_uploader("Logo", type=["png", "jpg"], label_visibility="collapsed")
+    if logo: st.image(logo, width=100)
+with col_t:
+    st.title("🚰 Water Supply & Borehole Management Dashboard")
+
+st.markdown("---")
+
+t1, t2, t3 = st.tabs(["📊 Dashboard-ka Maamulka", "📝 Entry Form", "📄 Word Reports"])
+
+# ==================== TAB 1: MAAMULKA ====================
+with t1:
+    # --- 1. MAAMULKA DEGDEGGE AH (QUICK INSIGHTS) ---
+    st.subheader("🎯 Maamulka Degdegga ah (Quick Insights)")
+    i1, i2, i3, i4, i5 = st.columns(5)
+    
+    if not df.empty:
+        # Ceelka ugu wax-soo-saarka badan
+        top_bh = df.groupby('Borehole')['Production_m3'].sum().idxmax()
+        i1.metric("Ceelka ugu Product badan", top_bh)
+        
+        # Engine-ka ugu saacadaha badan
+        top_eng = df.groupby('Borehole')['Engine_Hours'].sum().idxmax()
+        i2.metric("Engine-ka ugu Saacadaha badan", top_eng)
+        
+        # Solar-ka ugu shaqada badan
+        top_sol = df.groupby('Borehole')['Solar_Hours'].sum().idxmax()
+        i3.metric("Solar-ka ugu Shaqada badan", top_sol)
+        
+        # Ceelka ugu shidaalka badan
+        top_dsl = df.groupby('Borehole')['Diesel_Liters'].sum().idxmax()
+        i4.metric("Ceelka ugu Shidaalka badan", top_dsl)
+        
+        # Ceelka ugu maintenance-ka badan bishii
+        df['Total_Maint'] = df['E_Maint'] + df['B_Maint'] + df['S_Maint']
+        top_maint = df.groupby('Borehole')['Total_Maint'].sum().idxmax()
+        i5.metric("Ceelka ugu Maintenance badan", top_maint)
+    else:
+        for i in [i1, i2, i3, i4, i5]: i.metric("-", "Xog la'aan")
+
+    st.markdown("---")
+    
+    # --- 2. OPERATIONS ---
+    st.subheader("⚙️ Operations (Wax-soo-saarka & Isticmaalka)")
+    o1, o2, o3, o4 = st.columns(4)
+    o1.metric("Daily Production (m³)", f"{df_today['Production_m3'].sum():,}")
+    o1.metric("Monthly Production (m³)", f"{df_month['Production_m3'].sum():,}")
+    
+    o2.metric("Daily Diesel Total (L)", f"{df_today['Diesel_Liters'].sum():,}")
+    o2.metric("Monthly Diesel Total (L)", f"{df_month['Diesel_Liters'].sum():,}")
+    
+    o3.metric("Daily Engine Hours", f"{df_today['Engine_Hours'].sum():,}")
+    o3.metric("Monthly Engine Hours", f"{df_month['Engine_Hours'].sum():,}")
+    
+    o4.metric("Daily Solar Hours", f"{df_today['Solar_Hours'].sum():,}")
+    o4.metric("Monthly Solar Hours", f"{df_month['Solar_Hours'].sum():,}")
+
+    st.markdown("---")
+
+    # --- 3. COMPARISONS ---
+    st.subheader("⚖️ Comparisons (Isbarbardhigga)")
+    c1, c2 = st.columns(2)
+    with c1:fig_bh = px.bar(df, x="Borehole", y="Production_m3", color="Station", title="Production by Borehole & Station")
         st.plotly_chart(fig_bh, use_container_width=True)
     with c2:
         st.write("Engine vs Solar Hours")
@@ -58,3 +146,4 @@ with t3:
             cells.text, cells.text, cells.text, cells.text, cells.text, cells.text = str(r['Date'])[:10], str(r['Borehole']), str(r['Production_m3']), str(r['Diesel_Liters']), str(r['Engine_Hours']), f"${r['E_Maint']+r['B_Maint']+r['S_Maint']}"
         bio = io.BytesIO(); doc.save(bio)
         st.download_button(label="📥 Download Word", data=bio.getvalue(), file_name="Executive_Report.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        st.write("Borehole vs Borehole & Station vs Station")
